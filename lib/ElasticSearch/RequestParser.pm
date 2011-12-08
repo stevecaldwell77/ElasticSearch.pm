@@ -182,7 +182,11 @@ my %Index_Defn = (
         version   => ['int'],
         version_type => [ 'enum', [ 'internal', 'external' ] ],
     },
-    data => 'data',
+    data  => { data => 'data' },
+    fixup => sub {
+        my $data = $_[1]{data}{data};
+        $_[1]{data} = ref $data eq 'HASH' ? $data : \$data;
+    }
 );
 
 #===================================
@@ -208,8 +212,12 @@ sub create {
 
     $self->_index(
         'create',
-        {   cmd     => CMD_INDEX_TYPE_id,
-            data    => 'data',
+        {   cmd   => CMD_INDEX_TYPE_id,
+            data  => { data => 'data' },
+            fixup => sub {
+                my $data = $_[1]{data}{data};
+                $_[1]{data} = ref $data eq 'HASH' ? $data : \$data;
+            },
             postfix => '_create',
             qs      => {
                 refresh   => [ 'boolean', 1 ],
@@ -1530,7 +1538,6 @@ sub _usage {
     }
 
     if ( my $data = $defn->{data} ) {
-        $data = { data => $data } unless ref $data eq 'HASH';
         my @keys = sort { $a->[0] cmp $b->[0] }
             map { ref $_ ? [ $_->[0], 'optional' ] : [ $_, 'required' ] }
             values %$data;
@@ -1592,12 +1599,7 @@ sub _build_data {
     my $params = shift;
     my $defn   = shift or return;
 
-    my $top_level;
-    if ( ref $defn ne 'HASH' ) {
-        $top_level = 1;
-        $defn = { data => $defn };
-    }
-    elsif ( my $deprecated = shift ) {
+    if ( my $deprecated = shift ) {
         $defn = { %$defn, %$deprecated };
     }
 
@@ -1616,11 +1618,6 @@ KEY: while ( my ( $key, $source ) = each %$defn ) {
             $data{$key} = delete $params->{$source}
                 or die "Missing required param '$source'\n";
         }
-    }
-    if ($top_level) {
-        die "Param '$defn' is not a HASH ref"
-            unless ref $data{data} eq 'HASH';
-        return $data{data};
     }
     return \%data;
 }
